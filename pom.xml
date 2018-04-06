@@ -20,7 +20,7 @@
         <greeting.path>/resources/greeting</greeting.path>
         <name.host>localhost</name.host>
         <name.port>8082</name.port>
-        <name.path>/resources/names/1</name.path>
+        <name.path>/resources/names</name.path>
         <docker.push.username>arungupta</docker.push.username>
         <docker.push.password>password</docker.push.password>
         <version.fabric8.maven.plugin>3.5.30</version.fabric8.maven.plugin>
