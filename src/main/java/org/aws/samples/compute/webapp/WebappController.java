@@ -73,6 +73,7 @@ public class WebappController {
     }
 
     private String getEndpoint(String type, String scheme, String pathQuery) {
+        logger.info("getEndpoint: " + pathQuery);
         String host = System.getenv(type + "_SERVICE_HOST");
         if (null == host) {
             throw new RuntimeException(type + "_SERVICE_HOST environment variable not found");
@@ -90,6 +91,8 @@ public class WebappController {
         if (null != pathQuery) {
             path = path + pathQuery;
         }
+        logger.info("pathQuery: " + pathQuery);
+        logger.info("path: " + path);
 
         /**
          * Note: Due to AWS Serverless Java Container assume all requests to API Gateway
