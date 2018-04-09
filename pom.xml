@@ -35,6 +35,10 @@
         <version.xray.sdk-core>1.2.1</version.xray.sdk-core>
         <version.jackson.core>2.9.4</version.jackson.core>
         <version.javax.inject>1</version.javax.inject>
+        <!-- Open Liberty -->
+        <version.liberty-maven-plugin>2.2</version.liberty-maven-plugin>
+        <version.openliberty-runtime>RELEASE</version.openliberty-runtime>
+        <version.javax.ws.rs-api>2.1</version.javax.ws.rs-api>
     </properties>
 
     <dependencyManagement>
@@ -96,14 +100,16 @@
                 <artifactId>unirest-java</artifactId>
                 <version>${version.unirest}</version>
             </dependency>
+            <dependency>
+                <groupId>javax.ws.rs</groupId>
+                <artifactId>javax.ws.rs-api</artifactId>
+                <version>${version.javax.ws.rs-api}</version>
+                <scope>provided</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <dependencies>
-        <dependency>
-            <groupId>org.wildfly.swarm</groupId>
-            <artifactId>jaxrs</artifactId>
-        </dependency>
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-xray-recorder-sdk-core</artifactId>
@@ -142,7 +148,7 @@
         </dependency>
     </dependencies>
 
-    <build>
+<!--     <build>
         <finalName>${project.artifactId}</finalName>
         <plugins>
             <plugin>
@@ -186,8 +192,120 @@
                 <version>${version.fabric8.maven.plugin}</version>
             </plugin>
         </plugins>
-    </build>
+    </build> -->
+
     <profiles>
+        <profile>
+            <id>wildfly</id>
+            <!-- Wildfly JAX-RS -->
+            <dependencies>
+                <dependency>
+                    <groupId>org.wildfly.swarm</groupId>
+                    <artifactId>jaxrs</artifactId>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-war-plugin</artifactId>
+                        <version>2.5</version>
+                        <configuration>
+                            <failOnMissingWebXml>false</failOnMissingWebXml>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.wildfly.swarm</groupId>
+                        <artifactId>wildfly-swarm-plugin</artifactId>
+                        <version>${version.wildfly.swarm}</version>
+                        <configuration>
+                            <properties>
+                                <java.net.preferIPv4Stack>true</java.net.preferIPv4Stack>
+                                <swarm.http.host>${webapp.host}</swarm.http.host>
+                                <swarm.http.port>${webapp.port}</swarm.http.port>
+                            </properties>
+                            <environment>
+                                <GREETING_SERVICE_HOST>${greeting.host}</GREETING_SERVICE_HOST>
+                                <GREETING_SERVICE_PORT>${greeting.port}</GREETING_SERVICE_PORT>
+                                <GREETING_SERVICE_PATH>${greeting.path}</GREETING_SERVICE_PATH>
+                                <NAME_SERVICE_HOST>${name.host}</NAME_SERVICE_HOST>
+                                <NAME_SERVICE_PORT>${name.port}</NAME_SERVICE_PORT>
+                                <NAME_SERVICE_PATH>${name.path}</NAME_SERVICE_PATH>
+                            </environment>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>package</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>io.fabric8</groupId>
+                        <artifactId>fabric8-maven-plugin</artifactId>
+                        <version>${version.fabric8.maven.plugin}</version>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>openliberty</id>
+            <!-- JavaEE JAX-RS -->
+            <dependencies>
+                <dependency>
+                    <groupId>javax.ws.rs</groupId>
+                    <artifactId>javax.ws.rs-api</artifactId>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>net.wasdev.wlp.maven.plugins</groupId>
+                        <artifactId>liberty-maven-plugin</artifactId>
+                        <version>${version.liberty-maven-plugin}</version>
+                        <configuration>
+                            <!-- Open Liberty runtime -->
+                            <assemblyArtifact>
+                                <groupId>io.openliberty</groupId>
+                                <artifactId>openliberty-runtime</artifactId>
+                                <version>${version.openliberty-runtime}</version>
+                                <type>zip</type>
+                            </assemblyArtifact>
+                            <configFile>src/main/openliberty/config/server.xml</configFile>
+                            <serverEnv>src/main/openliberty/config/server.env</serverEnv>
+                            <include>usr</include>
+                            <bootstrapProperties>
+                                <default.http.port>${webapp.port}</default.http.port>
+                            </bootstrapProperties>
+                        </configuration>
+                        <executions>
+                            <!-- Create the defaultServer -->
+                            <execution>
+                                <id>create-default-server</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>create-server</goal>
+                                </goals>
+                            </execution>
+                            <!-- Install the service war into the defaultServer apps/ directory-->
+                            <execution>
+                                <id>install-app</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>install-apps</goal>
+                                </goals>
+                                <configuration>
+                                    <appsDirectory>apps</appsDirectory>
+                                    <stripVersion>true</stripVersion>
+                                    <installAppPackages>project</installAppPackages>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>docker</id>
             <build>
@@ -206,6 +324,67 @@
                         <groupId>io.fabric8</groupId>
                         <artifactId>fabric8-maven-plugin</artifactId>
                         <version>${version.fabric8.maven.plugin}</version>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>build</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+       <profile>
+            <id>docker-openliberty</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <version>3.7.0</version>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/*Handler.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>io.fabric8</groupId>
+                        <artifactId>fabric8-maven-plugin</artifactId>
+                        <version>${version.fabric8.maven.plugin}</version>
+                        <configuration>
+                            <images>
+                                <image>
+                                    <name>arungupta/${project.artifactId}:openliberty</name>
+                                    <build>
+                                        <from>open-liberty:microProfile1-java8-ibm</from>
+                                        <assembly>
+                                            <mode>dir</mode>
+                                            <targetDir>/opt/ol/wlp/usr/servers/defaultServer</targetDir>
+                                            <inline>
+                                                <files>
+                                                    <file>
+                                                        <source>./target/${project.artifactId}.war</source>
+                                                        <outputDirectory>./apps</outputDirectory>
+                                                    </file>
+                                                    <file>
+                                                        <source>./src/main/openliberty/config/server.xml</source>
+                                                        <outputDirectory>.</outputDirectory>
+                                                    </file>
+                                                    <file>
+                                                        <source>./src/main/openliberty/config/bootstrap.properties</source>
+                                                        <outputDirectory>.</outputDirectory>
+                                                    </file>
+                                                </files>
+                                            </inline>
+                                        </assembly>
+                                        <ports>${webapp.port}</ports>
+                                    </build>
+                                </image>
+                            </images>
+                        </configuration>
                         <executions>
                             <execution>
                                 <phase>package</phase>
