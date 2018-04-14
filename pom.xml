@@ -7,7 +7,8 @@
     <packaging>war</packaging>
     <properties>
         <docker.repo>arungupta</docker.repo>
-        <docker.name>${docker.repo}/${project.build.finalName}:%l</docker.name>
+        <docker.tag>latest</docker.tag>
+        <docker.name>${docker.repo}/${project.build.finalName}:${docker.tag}</docker.name>
         <greeting.host>localhost</greeting.host>
         <greeting.path>/resources/greeting</greeting.path>
         <greeting.port>8081</greeting.port>
