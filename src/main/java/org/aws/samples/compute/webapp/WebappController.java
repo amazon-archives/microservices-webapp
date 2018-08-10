@@ -69,6 +69,21 @@ public class WebappController {
         }
         xrayRecorder.endSubsegment();
 
+        String lambdaEndpoint = "https://0pnavsn5uk.beta.execute-api.us-east-1.amazonaws.com/prod";
+        try {
+            String response = Unirest
+                    .get(lambdaEndpoint)
+                    .header("accept", "text/plain")
+                    .header("x-amzn-trace-id", getTraceHeader(segment, subsegment).toString())
+                    .queryString("username", nameMessage)
+                    .queryString("message", greetingMessage)
+                    .asString()
+                    .getBody();
+            logger.info("API Gateway: " + response);
+        } catch (Exception e) {
+            logger.error("Failed connecting Name API: " + e);
+        }
+
         return greetingMessage + " " + nameMessage;
     }
 
