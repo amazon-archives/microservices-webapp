@@ -1,12 +1,14 @@
 package org.aws.samples.compute.webapp;
 
-import com.amazonaws.xray.AWSXRay;
-import com.amazonaws.xray.AWSXRayRecorder;
-import com.amazonaws.xray.entities.Namespace;
-import com.amazonaws.xray.entities.Segment;
-import com.amazonaws.xray.entities.Subsegment;
-import com.amazonaws.xray.entities.TraceHeader;
 import com.mashape.unirest.http.Unirest;
+import com.mashape.unirest.http.HttpResponse;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.util.EntityUtils;
+import com.amazonaws.xray.proxies.apache.http.HttpClientBuilder;
+import org.apache.http.client.config.RequestConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,71 +19,103 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriInfo;
+import javax.ws.rs.ServiceUnavailableException;
+import javax.ws.rs.WebApplicationException;
 
-@Path("/{id:([^/]+?)?}")
+import java.util.Random;
+
+@Path("/")
 public class WebappController {
 
     private static final Logger logger = LoggerFactory.getLogger(WebappController.class);
 
     @Produces(MediaType.TEXT_PLAIN)
     @GET
-    public String getMessage(@Context UriInfo uri, @PathParam("id") String id) {
+    public String getMessage(@Context UriInfo uri) {
         String greetingEndpoint = getEndpoint("GREETING", uri.getRequestUri().getScheme(), null);
-        logger.info("ID Query is: " + id);
-        String pathQuery = (id.equals("")) ? "/1" : ("/" + id);
+
+        // Randomize ID when none is set. More useful upstream responses
+        Random rand = new Random();
+        String id = Integer.toString(rand.nextInt(7) + 1);
+        String pathQuery = ("/" + id);
+
         String nameEndpoint = getEndpoint("NAME", uri.getRequestUri().getScheme(), pathQuery);
 
-        Segment segment = AWSXRay.getCurrentSegment();
-        AWSXRayRecorder xrayRecorder = AWSXRay.getGlobalRecorder();
-        if (AWSXRay.getGlobalRecorder().getTraceEntity() != null)
-            segment.putAnnotation("parentId", xrayRecorder.getTraceEntity().getId());
-        Subsegment subsegment = xrayRecorder.beginSubsegment("greeting");
-        subsegment.setNamespace(Namespace.REMOTE.toString());
+        // Set strict timeout, so we see slowly responding calls as well.
+        int timeout = 6;
+        RequestConfig config = RequestConfig.custom()
+          .setConnectTimeout(timeout * 1000)
+          .setConnectionRequestTimeout(timeout * 1000)
+          .setSocketTimeout(timeout * 1000).build();
+        CloseableHttpClient httpclient =
+          HttpClientBuilder.create().setDefaultRequestConfig(config).build();
+
+        //Add AWS X-Ray tracing capabilities to the client.
+        Unirest.setHttpClient(httpclient);
 
         String greetingMessage = "";
         try {
-            greetingMessage = Unirest
+            HttpResponse<String> textResponse = Unirest
                     .get(greetingEndpoint)
                     .header("accept", "text/plain")
-                    .header("x-amzn-trace-id", getTraceHeader(segment, subsegment).toString())
-                    .asString()
-                    .getBody();
+                    .asString();
+
+            if (textResponse.getStatus() != 200)
+            {
+              // Throw exception with upstream status code
+              // AWS X-Ray will capture this and show it in the map
+              throw new WebApplicationException(textResponse.getStatus());
+            }
+
+            greetingMessage = textResponse.getBody();
             logger.info("Greeting is: " + greetingMessage);
         } catch (Exception e) {
             logger.error("Failed connecting Greeting API: " + e);
+            throw new ServiceUnavailableException("Greeting service not available", 30L);
         }
-        xrayRecorder.endSubsegment();
-
-        subsegment = xrayRecorder.beginSubsegment("name");
-        subsegment.setNamespace(Namespace.REMOTE.toString());
 
         String nameMessage = "";
         try {
-            nameMessage = Unirest
+            HttpResponse<String> textResponse = Unirest
                     .get(nameEndpoint)
                     .header("accept", "text/plain")
-                    .header("x-amzn-trace-id", getTraceHeader(segment, subsegment).toString())
-                    .asString()
-                    .getBody();
+                    .asString();
+
+            if (textResponse.getStatus() != 200)
+            {
+              // Throw exception with upstream status code
+              // AWS X-Ray will capture this and show it in the map
+              throw new WebApplicationException(textResponse.getStatus());
+            }
+
+            nameMessage = textResponse.getBody();
             logger.info("Name is: " + nameMessage);
         } catch (Exception e) {
             logger.error("Failed connecting Name API: " + e);
+            throw new ServiceUnavailableException("Name service not available", 30L);
         }
-        xrayRecorder.endSubsegment();
 
-        String lambdaEndpoint = "https://0pnavsn5uk.beta.execute-api.us-east-1.amazonaws.com/prod";
+        String lambdaEndpoint = System.getenv("LAMBDA_TRACKER");
         try {
-            String response = Unirest
+            HttpResponse<String> textResponse = Unirest
                     .get(lambdaEndpoint)
                     .header("accept", "text/plain")
-                    .header("x-amzn-trace-id", getTraceHeader(segment, subsegment).toString())
                     .queryString("username", nameMessage)
                     .queryString("message", greetingMessage)
-                    .asString()
-                    .getBody();
-            logger.info("API Gateway: " + response);
+                    .asString();
+
+            /* Ignore status of Lambda response */
+            if (textResponse.getStatus() != 200)
+            {
+              logger.info("API Gateway Error response: " + textResponse.getStatusText());
+            } else {
+                logger.info("API Gateway: " + textResponse.getBody());
+            }
+
         } catch (Exception e) {
-            logger.error("Failed connecting Name API: " + e);
+            logger.error("Failed connecting Tracking API: " + e);
+
+            throw new ServiceUnavailableException("Tracking service not available", 30L);
         }
 
         return greetingMessage + " " + nameMessage;
@@ -125,15 +159,6 @@ public class WebappController {
 
         logger.info(type + " endpoint: " + endpoint);
         return endpoint;
-    }
-
-    private TraceHeader getTraceHeader(Segment segment, Subsegment subsegment) {
-        if (segment == null || subsegment == null)
-            return new TraceHeader();
-
-        return new TraceHeader(segment.getTraceId(),
-                segment.isSampled() ? subsegment.getId() : null,
-                segment.isSampled() ? TraceHeader.SampleDecision.SAMPLED : TraceHeader.SampleDecision.NOT_SAMPLED);
     }
 
 }
