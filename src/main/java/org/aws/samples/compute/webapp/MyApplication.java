@@ -18,6 +18,7 @@ public class MyApplication extends Application {
     public Set<Class<?>> getClasses() {
         Set<Class<?>> resources = new java.util.HashSet<>();
         resources.add(WebappController.class);
+        resources.add(HealthEndpoint.class);
         return resources;
     }
 
