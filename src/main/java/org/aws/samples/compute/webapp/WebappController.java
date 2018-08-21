@@ -2,11 +2,7 @@ package org.aws.samples.compute.webapp;
 
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.HttpResponse;
-import org.apache.http.HttpEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.util.EntityUtils;
 import com.amazonaws.xray.proxies.apache.http.HttpClientBuilder;
 import org.apache.http.client.config.RequestConfig;
 import org.slf4j.Logger;
@@ -14,7 +10,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -36,7 +31,7 @@ public class WebappController {
 
         // Randomize ID when none is set. More useful upstream responses
         Random rand = new Random();
-        String id = Integer.toString(rand.nextInt(7) + 1);
+        String id = Integer.toString(rand.nextInt(8) + 1);
         String pathQuery = ("/" + id);
 
         String nameEndpoint = getEndpoint("NAME", uri.getRequestUri().getScheme(), pathQuery);
