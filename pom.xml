@@ -20,7 +20,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <version.docker.maven.plugin>0.25.2</version.docker.maven.plugin>
         <version.jackson.core>2.9.5</version.jackson.core>
-        <version.jackson.databind>2.9.5</version.jackson.databind>
+        <version.jackson.databind>2.9.10.1</version.jackson.databind>
         <version.jackson.annotations>2.9.5</version.jackson.annotations>
         <version.javax.inject>1</version.javax.inject>
         <version.jersey>2.26</version.jersey>
